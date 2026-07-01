@@ -155,3 +155,80 @@ bash uninstall.sh
 ## License
 
 MIT
+
+## 中文说明
+
+### 项目简介
+
+本项目用于在 Ubuntu VPS 上一键部署 Xray-core VLESS + REALITY + Vision。安装完成后，脚本会输出客户端链接、订阅链接，并把客户端信息保存到本机。
+
+### 支持系统
+
+- Ubuntu 24.04 LTS x64
+- 建议使用全新 VPS 或已确认可用的干净环境
+
+### 一键安装命令
+
+```bash
+sudo -i
+apt update && apt install -y curl
+bash <(curl -Ls https://raw.githubusercontent.com/hexa46656-creator/xray-vless-reality-vision/main/install.sh)
+```
+
+### 默认端口
+
+- 默认入站端口：`8443/tcp`
+
+### 默认 SNI
+
+- 默认 `REALITY_SERVER_NAME`：`speed.cloudflare.com`
+- 默认 `REALITY_DEST`：`speed.cloudflare.com:443`
+- 如果你手动传入参数，脚本会保留你的自定义值
+
+### 安装完成后的客户端链接
+
+- 客户端信息会保存到：`/root/xray-reality-client.txt`
+- 安装完成后，脚本会在终端显示原始 VLESS 链接和订阅链接
+- 你可以直接复制链接导入，也可以使用下方二维码扫码导入
+
+### 二维码扫码导入
+
+安装完成后，脚本会同时显示二维码并保存 PNG 文件。
+
+- 二维码内容优先使用脚本最终生成的订阅链接
+- 如果订阅链接不可用，会回退到原始 `vless://` 链接
+- PNG 文件保存路径：`/root/xray-vless-reality-qr.png`
+
+扫码导入适用于以下客户端：
+
+- Shadowrocket
+- v2rayNG
+- Hiddify
+- NekoBox
+- Clash / Clash Verge
+
+### 状态检查命令
+
+```bash
+bash status.sh
+```
+
+### 卸载命令
+
+```bash
+bash uninstall.sh
+```
+
+### 安全提示
+
+- 不要把客户端信息公开分享
+- 如果你修改了端口或 SNI，请重新确认服务器配置和客户端配置一致
+- 建议先备份 `/root/xray-reality-client.txt`
+
+### 故障排查
+
+1. 先执行 `bash status.sh` 查看 Xray 服务状态和日志
+2. 确认 `8443/tcp` 已在 VPS 防火墙和云安全组中放行
+3. 确认 `speed.cloudflare.com` 的 DNS 解析正常
+4. 如果二维码无法显示，直接复制 `/root/xray-reality-client.txt` 里的原始链接手动导入
+5. 如果订阅或客户端链接失效，重新运行安装脚本并检查生成输出

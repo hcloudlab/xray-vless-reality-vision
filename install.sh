@@ -10,6 +10,9 @@ RED="\033[31m"
 GREEN="\033[32m"
 YELLOW="\033[33m"
 BLUE="\033[34m"
+BOLD_GREEN="\033[1;32m"
+BOLD_YELLOW="\033[1;33m"
+BOLD_CYAN="\033[1;36m"
 NC="\033[0m"
 
 XRAY_CONFIG="/usr/local/etc/xray/config.json"
@@ -19,8 +22,6 @@ INSTALL_LOCK_FILE="/etc/vpsguard/xray-vless-reality-vision.lock"
 INSTALL_REPORT_FILE="/root/xray-vless-reality-vision-install-report.txt"
 NETWORK_SYSCTL_FILE="/etc/sysctl.d/99-xray-reality-tuning.conf"
 UFW_MSS_CLAMP_MARKER="vpsguard-xray-reality-mss-clamp"
-SHADOWROCKET_CONF_SRC="default.conf"
-SHADOWROCKET_CONF_DST="/root/shadowrocket-default.conf"
 
 declare -a ROLLBACK_TARGETS=()
 declare -a ROLLBACK_BACKUPS=()
@@ -391,8 +392,9 @@ check_reality_dns_health() {
   fi
 
   if [[ -n "${system_dns}" && -n "${cloudflare_dns}" && -n "${google_dns}" ]]; then
-    if [[ "$({ printf '%s
-' "${system_dns}" "${cloudflare_dns}" "${google_dns}" | awk 'NF' | sort -u | wc -l | tr -d ' '; })" -gt 1 ]]; then
+    local distinct_count
+    distinct_count="$(printf '%s\n%s\n%s\n' "${system_dns}" "${cloudflare_dns}" "${google_dns}" | awk 'NF' | sort -u | wc -l | tr -d ' ')"
+    if [[ "${distinct_count}" -gt 1 ]]; then
       warn "Reality DNS lookups returned different A records across resolvers."
       mismatch=1
     fi
@@ -451,6 +453,7 @@ configure_tcp_mss_clamp() {
   local before6_rules="/etc/ufw/before6.rules"
   local marker="# ${UFW_MSS_CLAMP_MARKER}"
   local tmp_file
+  local rules_file
 
   for rules_file in "${before_rules}" "${before6_rules}"; do
     [[ -f "${rules_file}" ]] || continue
@@ -780,19 +783,6 @@ EOF
   xray run -test -config "${XRAY_CONFIG}" || error "Xray config test failed."
 }
 
-install_shadowrocket_config() {
-  log "Preparing Shadowrocket local config..."
-
-  if [[ -f "${SHADOWROCKET_CONF_SRC}" ]]; then
-    [[ -f "${SHADOWROCKET_CONF_DST}" ]] || track_created_path "${SHADOWROCKET_CONF_DST}"
-    cp "${SHADOWROCKET_CONF_SRC}" "${SHADOWROCKET_CONF_DST}"
-    chmod 600 "${SHADOWROCKET_CONF_DST}"
-    log "Shadowrocket config copied to ${SHADOWROCKET_CONF_DST}"
-  else
-    warn "${SHADOWROCKET_CONF_SRC} not found in installer directory. Skipping Shadowrocket local config copy."
-  fi
-}
-
 save_state() {
   log "Saving installer state: ${INSTALLER_STATE}"
 
@@ -804,7 +794,6 @@ CLIENT_NAME="${CLIENT_NAME}"
 DEPLOY_USER="${DEPLOY_USER}"
 SSH_PORT="${SSH_PORT}"
 SERVER_IP="${SERVER_IP}"
-SHADOWROCKET_CONF_DST="${SHADOWROCKET_CONF_DST}"
 EOF
 
   chmod 600 "${INSTALLER_STATE}"
@@ -872,12 +861,6 @@ chrome
 VLESS Link:
 ${VLESS_LINK}
 
-Shadowrocket Local Config:
-${SHADOWROCKET_CONF_DST}
-
-GitHub default.conf Raw URL:
-https://raw.githubusercontent.com/hexa46656-creator/secure-vps-xray-reality-installer/main/default.conf
-
 Config file:
 ${XRAY_CONFIG}
 
@@ -920,6 +903,26 @@ EOF
   print_client_qr "${SUBSCRIPTION_ACCESS_URL:-${VLESS_LINK:-}}" "/root/xray-vless-reality-qr.png"
 }
 
+print_final_subscription_banner() {
+  local link="${1:-}"
+  local border
+  border="$(printf '%.0s=' {1..60})"
+
+  if [[ -z "${link}" ]]; then
+    warn "Subscription link is empty; nothing to display in final banner."
+    return 0
+  fi
+
+  echo
+  echo -e "${BOLD_GREEN}${border}${NC}"
+  echo -e "${BOLD_GREEN}  订阅链接 / SUBSCRIPTION LINK — 请立即保存${NC}"
+  echo -e "${BOLD_GREEN}${border}${NC}"
+  echo -e "${BOLD_CYAN}${link}${NC}"
+  echo -e "${BOLD_GREEN}${border}${NC}"
+  echo -e "${BOLD_YELLOW}完整客户端信息已保存到: ${CLIENT_INFO}${NC}"
+  echo
+}
+
 start_services() {
   log "Starting Xray service..."
 
@@ -953,7 +956,6 @@ main() {
   check_reality_dns_health
   generate_values
   write_xray_config
-  install_shadowrocket_config
   save_state
   start_services
   write_client_info
@@ -963,6 +965,7 @@ main() {
   report_phase
 
   log "Deployment completed successfully."
+  print_final_subscription_banner "${SUBSCRIPTION_ACCESS_URL:-${VLESS_LINK:-}}"
 }
 
 main "$@"

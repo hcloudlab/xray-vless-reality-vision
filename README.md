@@ -40,11 +40,21 @@ bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-v
 
 ## 自定义端口
 
-默认入站端口为 `8443/tcp`。
+默认入站端口为 `443/tcp`。Reality 用 443 最不容易被 GFW 阻断，推荐保持默认。
+
+指定固定端口：
 
 ```bash
-XRAY_PORT=8443 bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-vision/main/install.sh)
+XRAY_PORT=2053 bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-vision/main/install.sh)
 ```
+
+随机端口（脚本自动挑选一个 20000-49999 的空闲端口）：
+
+```bash
+XRAY_PORT=random bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-vision/main/install.sh)
+```
+
+> ⚠️ 随机端口是非 443 端口，Reality 在非 443 端口更容易被 GFW 阻断。如果随机端口连接超时，改用默认 443 重装即可。
 
 ## 自定义 REALITY SNI
 
@@ -119,7 +129,7 @@ xray version
 ## 故障排查
 
 1. 先执行状态检查脚本查看 Xray 服务状态和日志（见上方"状态检查"）。
-2. 确认自定义端口（默认 `8443/tcp`）已在 VPS 防火墙和云服务商安全组中放行。
+2. 确认入站端口（默认 `443/tcp`，或你自定义/随机的端口）已在 VPS 防火墙和云服务商安全组中放行。
 3. 确认 REALITY SNI 域名（默认 `speed.cloudflare.com`）的 DNS 解析在服务器上正常。
 4. 如果二维码无法显示，直接复制 `/root/xray-reality-client.txt` 里的原始 VLESS 链接手动导入。
 5. 如果重新安装后链接失效，重新运行一键安装命令并检查终端最后输出的订阅链接。

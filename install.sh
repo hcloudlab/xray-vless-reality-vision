@@ -29,7 +29,7 @@ declare -a ROLLBACK_TARGETS=()
 declare -a ROLLBACK_BACKUPS=()
 ROLLBACK_DONE=0
 
-XRAY_PORT="${XRAY_PORT:-8443}"
+XRAY_PORT="${XRAY_PORT:-443}"
 REALITY_SERVER_NAME="${REALITY_SERVER_NAME:-speed.cloudflare.com}"
 REALITY_DEST="${REALITY_DEST:-speed.cloudflare.com:443}"
 REALITY_DNS_STRICT="${REALITY_DNS_STRICT:-warn}"
@@ -944,10 +944,32 @@ start_services() {
   fi
 }
 
+resolve_xray_port() {
+  # XRAY_PORT=random 时随机选一个未被占用的高位端口；否则原样使用（默认 443）。
+  # 提示：Reality 用非 443 端口更容易被 GFW 阻断，随机端口有此风险。
+  [[ "${XRAY_PORT}" == "random" ]] || return 0
+
+  local listening candidate attempt
+  listening="$(ss -tlnH 2>/dev/null | awk '{print $4}' | sed 's/.*://')"
+  for attempt in {1..25}; do
+    candidate=$(( RANDOM % 30000 + 20000 ))   # 20000-49999
+    if ! grep -qxF "${candidate}" <<<"${listening}"; then
+      XRAY_PORT="${candidate}"
+      log "Selected random Xray port: ${XRAY_PORT}"
+      warn "Reality 使用非 443 端口更易被 GFW 阻断；如遇超时可改用 XRAY_PORT=443 重装。"
+      return 0
+    fi
+  done
+
+  XRAY_PORT="${candidate}"
+  warn "Could not confirm a free random port after retries; using ${XRAY_PORT}."
+}
+
 main() {
   trap 'on_error "${LINENO}" "${BASH_COMMAND}"' ERR
   trap 'on_exit "$?"' EXIT
 
+  resolve_xray_port
   preflight_phase
   load_install_state
 

@@ -658,8 +658,9 @@ install_xray() {
     error "Xray command not found after installation."
   fi
 
+  # head 提前关闭管道会让 xray version 收到 SIGPIPE，配合 pipefail 会误判失败，故加 || true
   log "Installed Xray version:"
-  xray version | head -n1
+  xray version | head -n1 || true
 }
 
 generate_values() {
@@ -690,14 +691,14 @@ generate_values() {
     /^PrivateKey:/ {print $2}
     /^Private key:/ {print $2}
     /^Private Key:/ {print $2}
-  ' | head -n1)"
+  ' | head -n1 || true)"
 
   PUBLIC_KEY="$(echo "${KEY_PAIR}" | awk -F': ' '
     /^Password \(PublicKey\):/ {print $2}
     /^PublicKey:/ {print $2}
     /^Public key:/ {print $2}
     /^Public Key:/ {print $2}
-  ' | head -n1)"
+  ' | head -n1 || true)"
 
   SHORT_ID="$(openssl rand -hex 8 2>/dev/null || true)"
   SERVER_IP="$(curl -4 -s --max-time 10 https://api.ipify.org || true)"

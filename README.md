@@ -1,16 +1,14 @@
 # Xray VLESS + REALITY + Vision 一键安装脚本
 
-适用于 Ubuntu 24.04 / 22.04 与 Debian 11/12 VPS 的安全加固与 Xray-core VLESS + REALITY + Vision 自动部署脚本。
+适用于 Ubuntu 24.04 / 22.04 与 Debian 11/12 VPS 的 Xray-core VLESS + REALITY + Vision 一键安装脚本。
 
 ## 功能特性
 
-- VPS 基础安全加固（禁用 root SSH 登录、创建部署用户、开启公钥认证）
-- UFW 防火墙自动配置
-- Fail2ban 防暴力破解
 - 自动安装 / 更新 Xray-core
 - 自动生成 UUID、REALITY 密钥对、shortId
 - 自动生成 VLESS 导入链接与二维码
 - 网络参数调优（BBR、TCP Fast Open、MTU 探测）
+- 如果 UFW 已启用，自动补充 Xray 入站端口规则；不会重置或启用 UFW
 - 安装失败自动回滚，避免半途而废导致服务器状态混乱
 - 安装完成后，会在终端最后位置用**醒目颜色**单独展示订阅链接，避免被其他日志淹没
 
@@ -99,7 +97,7 @@ cat /root/xray-reality-client.txt
 bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-vision/main/status.sh)
 ```
 
-会检查系统信息、Xray 版本、配置文件、服务状态、监听端口、防火墙、Fail2ban 状态等。
+会检查系统信息、Xray 版本、配置文件、服务状态、监听端口、防火墙状态等。
 
 ## 卸载
 
@@ -107,7 +105,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-v
 bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-vision/main/uninstall.sh)
 ```
 
-卸载脚本会逐项确认后再执行，默认不会改动 SSH / UFW / Fail2ban 配置，仅移除 Xray 本身与其配置。
+卸载脚本会逐项确认后再执行，默认不会改动 SSH 或无关防火墙配置，仅移除 Xray 本身与其配置。
 
 ## 常用命令
 
@@ -115,13 +113,11 @@ bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-v
 systemctl status xray
 journalctl -u xray -e --no-pager
 ufw status verbose
-fail2ban-client status sshd
 xray version
 ```
 
 ## 安全提示
 
-- 本脚本采用保守的 SSH 加固策略：禁用 root 登录、启用公钥认证，但**默认不会强制关闭密码登录**，避免新用户被意外锁在门外。确认部署用户的 SSH 密钥登录可用后，建议手动关闭密码登录。
 - 不要把 `/root/xray-reality-client.txt`、订阅链接或二维码对外公开分享。
 - 如果修改了端口或 SNI，请确保客户端配置与服务器保持一致。
 - 建议先备份 `/root/xray-reality-client.txt`。

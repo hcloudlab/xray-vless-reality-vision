@@ -10,6 +10,9 @@ XRAY_CONFIG_DIR="/usr/local/etc/xray"
 XRAY_LOG_DIR="/var/log/xray"
 CLIENT_INFO="/root/xray-reality-client.txt"
 INSTALLER_STATE="/etc/xray-reality-installer.env"
+INSTALL_LOCK_FILE="/etc/vpsguard/xray-vless-reality-vision.lock"
+INSTALL_REPORT_FILE="/root/xray-vless-reality-vision-install-report.txt"
+XRAY_PORT="${XRAY_PORT:-443}"
 
 log() {
   echo -e "${GREEN}[INFO]${NC} $1"
@@ -39,12 +42,17 @@ confirm() {
 require_root
 
 echo "This will uninstall Xray-core and remove Xray configuration files."
-echo "It will NOT modify SSH, UFW, or Fail2ban settings by default."
+echo "It will NOT modify SSH or unrelated firewall settings."
 echo
 
 if ! confirm "Continue uninstalling Xray"; then
   log "Uninstall cancelled."
   exit 0
+fi
+
+if [[ -f "${INSTALLER_STATE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${INSTALLER_STATE}"
 fi
 
 log "Stopping Xray service..."
@@ -69,6 +77,8 @@ if [[ -f "${INSTALLER_STATE}" ]]; then
   rm -f "${INSTALLER_STATE}"
 fi
 
+rm -f "${INSTALL_LOCK_FILE}" "${INSTALL_REPORT_FILE}"
+
 if [[ -f "${CLIENT_INFO}" ]]; then
   if confirm "Remove client info file ${CLIENT_INFO}"; then
     rm -f "${CLIENT_INFO}"
@@ -79,12 +89,6 @@ if [[ -f "${CLIENT_INFO}" ]]; then
 fi
 
 if confirm "Remove Xray firewall rule for the previously configured port if known"; then
-  if [[ -f "${INSTALLER_STATE}" ]]; then
-    # Normally removed above, but keep fallback logic.
-    # shellcheck disable=SC1090
-    source "${INSTALLER_STATE}"
-  fi
-  XRAY_PORT="${XRAY_PORT:-8443}"
   ufw delete allow "${XRAY_PORT}/tcp" 2>/dev/null || true
   log "Attempted to remove UFW rule for port ${XRAY_PORT}/tcp."
 fi

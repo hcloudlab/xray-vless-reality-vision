@@ -33,7 +33,7 @@ if [[ -f "${INSTALLER_STATE}" ]]; then
   source "${INSTALLER_STATE}"
 fi
 
-XRAY_PORT="${XRAY_PORT:-8443}"
+XRAY_PORT="${XRAY_PORT:-443}"
 
 section "System"
 if [[ -f /etc/os-release ]]; then
@@ -55,7 +55,11 @@ section "Xray Config"
 if [[ -f "${XRAY_CONFIG}" ]]; then
   ok "Config exists: ${XRAY_CONFIG}"
   if command -v xray >/dev/null 2>&1; then
-    xray run -test -config "${XRAY_CONFIG}" && ok "Config test passed" || fail "Config test failed"
+    if xray run -test -config "${XRAY_CONFIG}"; then
+      ok "Config test passed"
+    else
+      fail "Config test failed"
+    fi
   fi
 else
   fail "Config not found: ${XRAY_CONFIG}"
@@ -81,14 +85,6 @@ if command -v ufw >/dev/null 2>&1; then
   ufw status verbose || true
 else
   warn "ufw not installed"
-fi
-
-section "Fail2ban"
-if command -v fail2ban-client >/dev/null 2>&1; then
-  fail2ban-client status || true
-  fail2ban-client status sshd || true
-else
-  warn "fail2ban not installed"
 fi
 
 section "Client Info"

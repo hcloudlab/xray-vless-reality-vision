@@ -11,7 +11,6 @@ GREEN="\033[32m"
 YELLOW="\033[33m"
 BLUE="\033[34m"
 BOLD_GREEN="\033[1;32m"
-BOLD_YELLOW="\033[1;33m"
 BOLD_CYAN="\033[1;36m"
 BOLD_BRIGHT_YELLOW="\033[1;93m"
 BANNER_TITLE="\033[1;97;42m"
@@ -34,8 +33,6 @@ REALITY_SERVER_NAME="${REALITY_SERVER_NAME:-www.cloudflare.com}"
 REALITY_DEST="${REALITY_DEST:-www.cloudflare.com:443}"
 REALITY_DNS_STRICT="${REALITY_DNS_STRICT:-warn}"
 CLIENT_NAME="${CLIENT_NAME:-Xray-Reality}"
-DEPLOY_USER="${DEPLOY_USER:-alex}"
-DEPLOY_USER_PASSWORD="${DEPLOY_USER_PASSWORD:-}"
 INSTALLER_CORE_DIR="${INSTALLER_CORE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../vps-installer-core" 2>/dev/null && pwd || true)}"
 
 log() {
@@ -166,10 +163,10 @@ probe_network() {
     warn "Curl connectivity test could not complete."
   fi
 
-  if ss -tulpen 2>/dev/null | grep -E ':(443|8443)\b' >/dev/null; then
-    warn "A service is already listening on TCP 443 or 8443."
+  if ss -tulpn 2>/dev/null | awk -v port="${XRAY_PORT}" '{split($5, a, ":")} a[length(a)] == port {found=1} END {exit found ? 0 : 1}'; then
+    warn "A service is already listening on TCP ${XRAY_PORT}."
   else
-    log "No TCP conflict detected on ports 443 or 8443."
+    log "No TCP conflict detected on port ${XRAY_PORT}."
   fi
 }
 
@@ -183,7 +180,6 @@ preflight_phase() {
   section_header "PHASE 1 - PREFLIGHT"
   require_root
   check_os
-  detect_ssh_port
   check_systemctl_ready
   probe_network
 }
@@ -346,17 +342,6 @@ check_os() {
   log "Detected supported OS: ${INSTALLER_OS_PRETTY_NAME}"
 }
 
-detect_ssh_port() {
-  SSH_PORT="$(ss -tlnp 2>/dev/null | awk '/sshd/ {print $4}' | awk -F: '{print $NF}' | head -n1 || true)"
-
-  if [[ -z "${SSH_PORT}" ]]; then
-    SSH_PORT="$(grep -Ei '^\s*Port\s+' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null | awk '{print $NF}' | tail -n1 || true)"
-  fi
-
-  SSH_PORT="${SSH_PORT:-22}"
-  log "Detected SSH port: ${SSH_PORT}"
-}
-
 extract_reality_dest_host() {
   local dest="${1:-${REALITY_DEST}}"
 
@@ -416,7 +401,7 @@ check_reality_dns_health() {
 
 install_packages() {
   installer_core_install_packages \
-    curl wget unzip jq socat ufw fail2ban ca-certificates gnupg lsb-release openssl iproute2 sudo dnsutils qrencode
+    curl wget unzip jq socat ufw ca-certificates gnupg lsb-release openssl iproute2 dnsutils qrencode
 }
 
 detect_path_mtu() {
@@ -458,6 +443,11 @@ configure_tcp_mss_clamp() {
   local marker="# ${UFW_MSS_CLAMP_MARKER}"
   local tmp_file
   local rules_file
+
+  if ! command -v ufw >/dev/null 2>&1 || ! ufw status 2>/dev/null | grep -q '^Status: active'; then
+    warn "UFW is not active; skipping UFW MSS clamp changes."
+    return 0
+  fi
 
   for rules_file in "${before_rules}" "${before6_rules}"; do
     [[ -f "${rules_file}" ]] || continue
@@ -543,110 +533,23 @@ print_client_qr() {
   echo "4. Save and test the node"
 }
 
-create_deploy_user() {
-  log "Creating or updating deploy user: ${DEPLOY_USER}"
-
-  if [[ ! "${DEPLOY_USER}" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
-    error "Invalid DEPLOY_USER: ${DEPLOY_USER}"
-  fi
-
-  if ! id "${DEPLOY_USER}" >/dev/null 2>&1; then
-    adduser --disabled-password --gecos "" "${DEPLOY_USER}"
-  fi
-
-  usermod -aG sudo "${DEPLOY_USER}"
-
-  if [[ -z "${DEPLOY_USER_PASSWORD}" ]]; then
-    DEPLOY_USER_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-20)"
-  fi
-
-  echo "${DEPLOY_USER}:${DEPLOY_USER_PASSWORD}" | chpasswd
-
-  mkdir -p "/home/${DEPLOY_USER}/.ssh"
-  chmod 700 "/home/${DEPLOY_USER}/.ssh"
-
-  if [[ -f /root/.ssh/authorized_keys && ! -s "/home/${DEPLOY_USER}/.ssh/authorized_keys" ]]; then
-    cp /root/.ssh/authorized_keys "/home/${DEPLOY_USER}/.ssh/authorized_keys"
-    chmod 600 "/home/${DEPLOY_USER}/.ssh/authorized_keys"
-  fi
-
-  chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "/home/${DEPLOY_USER}/.ssh"
-
-  log "Deploy user is ready: ${DEPLOY_USER}"
-  warn "Save this SSH login password now. It will also be saved in ${CLIENT_INFO} with root-only permission."
-}
-
-harden_ssh_safe() {
-  log "Applying safe SSH hardening..."
-
-  backup_file /etc/ssh/sshd_config
-
-  if grep -qE '^\s*#?\s*PermitRootLogin\s+' /etc/ssh/sshd_config; then
-    sed -i 's/^\s*#\?\s*PermitRootLogin\s\+.*/PermitRootLogin no/' /etc/ssh/sshd_config
-  else
-    echo "PermitRootLogin no" >> /etc/ssh/sshd_config
-  fi
-
-  if grep -qE '^\s*#?\s*PubkeyAuthentication\s+' /etc/ssh/sshd_config; then
-    sed -i 's/^\s*#\?\s*PubkeyAuthentication\s\+.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-  else
-    echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
-  fi
-
-  # Conservative strategy:
-  # Keep password login enabled by default because this installer creates a new deploy user.
-  # Users can disable password login after confirming SSH key login works.
-  if grep -qE '^\s*#?\s*PasswordAuthentication\s+' /etc/ssh/sshd_config; then
-    sed -i 's/^\s*#\?\s*PasswordAuthentication\s\+.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-  else
-    echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-  fi
-
-  sshd -t || error "SSH config test failed. Check /etc/ssh/sshd_config"
-  systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
-
-  log "SSH hardening completed: root login disabled, public key auth enabled, password login kept enabled."
-}
-
 configure_ufw() {
-  log "Configuring UFW firewall..."
+  log "Checking UFW firewall..."
 
-  if ufw status 2>/dev/null | grep -q '^Status: active' && [[ -f "${INSTALL_LOCK_FILE}" ]]; then
-    log "UFW already initialized. Ensuring required rules remain present."
-  else
-    ufw --force reset
-    ufw default deny incoming
-    ufw default allow outgoing
+  if ! command -v ufw >/dev/null 2>&1; then
+    warn "UFW is not available; skipping firewall rule update."
+    return 0
   fi
 
-  ufw allow "${SSH_PORT}/tcp" comment "SSH" >/dev/null 2>&1 || true
+  if ! ufw status 2>/dev/null | grep -q '^Status: active'; then
+    warn "UFW is installed but inactive. Not enabling or resetting it automatically."
+    warn "If you use UFW, run manually: ufw allow ${XRAY_PORT}/tcp"
+    return 0
+  fi
+
   ufw allow "${XRAY_PORT}/tcp" comment "Xray Reality" >/dev/null 2>&1 || true
-  ufw allow 80/tcp comment "HTTP" >/dev/null 2>&1 || true
-  ufw allow 443/tcp comment "HTTPS" >/dev/null 2>&1 || true
-
-  ufw --force enable >/dev/null 2>&1 || true
+  ufw reload >/dev/null 2>&1 || true
   ufw status verbose
-}
-
-configure_fail2ban() {
-  log "Configuring Fail2ban for sshd..."
-
-  mkdir -p /etc/fail2ban/jail.d
-
-  cat > /etc/fail2ban/jail.d/sshd.local <<EOF
-[sshd]
-enabled = true
-port = ${SSH_PORT}
-filter = sshd
-backend = systemd
-maxretry = 5
-findtime = 10m
-bantime = 1h
-EOF
-
-  systemctl enable fail2ban
-  systemctl restart fail2ban
-  fail2ban-client status sshd || true
 }
 
 install_xray() {
@@ -798,8 +701,6 @@ XRAY_PORT="${XRAY_PORT}"
 REALITY_SERVER_NAME="${REALITY_SERVER_NAME}"
 REALITY_DEST="${REALITY_DEST}"
 CLIENT_NAME="${CLIENT_NAME}"
-DEPLOY_USER="${DEPLOY_USER}"
-SSH_PORT="${SSH_PORT}"
 SERVER_IP="${SERVER_IP}"
 EOF
 
@@ -814,26 +715,16 @@ write_client_info() {
 
   VLESS_LINK="vless://${UUID}@${SERVER_IP}:${XRAY_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${REALITY_SERVER_NAME}&fp=chrome&pbk=${PUBLIC_KEY}&sid=${SHORT_ID}&type=tcp&headerType=none#${encoded_name}"
 
-  [[ -f "${CLIENT_INFO}" ]] || track_created_path "${CLIENT_INFO}"
+  if [[ -f "${CLIENT_INFO}" ]]; then
+    backup_file "${CLIENT_INFO}"
+  else
+    track_created_path "${CLIENT_INFO}"
+  fi
 
   cat > "${CLIENT_INFO}" <<EOF
 ============================================================
 Xray-core VLESS + REALITY + Vision Client Info
 ============================================================
-
-SSH Login User:
-${DEPLOY_USER}
-
-SSH Login Password:
-${DEPLOY_USER_PASSWORD}
-
-SSH Login Command:
-ssh ${DEPLOY_USER}@${SERVER_IP}
-
-Important:
-Root SSH login has been disabled for safety.
-Use the SSH login user above for future server management.
-Save this password immediately.
 
 Server IP:
 ${SERVER_IP}
@@ -875,7 +766,6 @@ Useful commands:
 systemctl status xray
 journalctl -u xray -e --no-pager
 ufw status verbose
-fail2ban-client status sshd
 xray version
 dig ${REALITY_SERVER_NAME} @1.1.1.1
 dig ${REALITY_SERVER_NAME} @8.8.8.8
@@ -949,9 +839,10 @@ resolve_xray_port() {
   # 提示：Reality 用非 443 端口更容易被 GFW 阻断，随机端口有此风险。
   [[ "${XRAY_PORT}" == "random" ]] || return 0
 
-  local listening candidate attempt
+  local listening candidate attempt=0
   listening="$(ss -tlnH 2>/dev/null | awk '{print $4}' | sed 's/.*://')"
-  for attempt in {1..25}; do
+  while (( attempt < 25 )); do
+    attempt=$((attempt + 1))
     candidate=$(( RANDOM % 30000 + 20000 ))   # 20000-49999
     if ! grep -qxF "${candidate}" <<<"${listening}"; then
       XRAY_PORT="${candidate}"
@@ -976,11 +867,8 @@ main() {
   section_header "PHASE 2 - INSTALL"
   install_packages
   enable_network_tuning
-  create_deploy_user
-  harden_ssh_safe
   configure_ufw
   configure_tcp_mss_clamp
-  configure_fail2ban
   install_xray
   check_reality_dns_health
   generate_values

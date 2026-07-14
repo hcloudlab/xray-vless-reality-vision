@@ -58,7 +58,7 @@ XRAY_PORT=random bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xra
 
 ## 自定义 REALITY SNI
 
-默认 `REALITY_SERVER_NAME` 为 `speed.cloudflare.com`，默认 `REALITY_DEST` 为 `speed.cloudflare.com:443`。
+默认 `REALITY_SERVER_NAME` 为 `www.cloudflare.com`，默认 `REALITY_DEST` 为 `www.cloudflare.com:443`。
 
 ```bash
 REALITY_SERVER_NAME=www.apple.com REALITY_DEST=www.apple.com:443 bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-vision/main/install.sh)
@@ -130,7 +130,7 @@ xray version
 
 1. 先执行状态检查脚本查看 Xray 服务状态和日志（见上方"状态检查"）。
 2. 确认入站端口（默认 `443/tcp`，或你自定义/随机的端口）已在 VPS 防火墙和云服务商安全组中放行。
-3. 确认 REALITY SNI 域名（默认 `speed.cloudflare.com`）的 DNS 解析在服务器上正常。
+3. 确认 REALITY SNI 域名（默认 `www.cloudflare.com`）的 DNS 解析在服务器上正常。
 4. 如果二维码无法显示，直接复制 `/root/xray-reality-client.txt` 里的原始 VLESS 链接手动导入。
 5. 如果重新安装后链接失效，重新运行一键安装命令并检查终端最后输出的订阅链接。
 

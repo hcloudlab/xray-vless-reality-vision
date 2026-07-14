@@ -143,14 +143,16 @@ probe_network() {
   section_header "NETWORK DIAGNOSTICS"
 
   if command -v ping >/dev/null 2>&1; then
-    if ping -c 3 -W 2 1.1.1.1 >/tmp/xray-vless-reality-vision-ping.log 2>&1; then
+    local ping_log
+    ping_log="$(mktemp)"
+    if ping -c 3 -W 2 1.1.1.1 >"${ping_log}" 2>&1; then
       log "Ping to 1.1.1.1 succeeded."
-      awk '/^rtt|^round-trip/ {print}' /tmp/xray-vless-reality-vision-ping.log | tail -n1 || true
+      awk '/^rtt|^round-trip/ {print}' "${ping_log}" | tail -n1 || true
     else
       ping_rc=$?
       warn "Ping to 1.1.1.1 failed with code ${ping_rc}."
     fi
-    rm -f /tmp/xray-vless-reality-vision-ping.log
+    rm -f "${ping_log}"
   else
     warn "ping command is not available; skipping ICMP probe."
   fi

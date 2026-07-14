@@ -13,6 +13,8 @@ BLUE="\033[34m"
 BOLD_GREEN="\033[1;32m"
 BOLD_YELLOW="\033[1;33m"
 BOLD_CYAN="\033[1;36m"
+BOLD_BRIGHT_YELLOW="\033[1;93m"
+BANNER_TITLE="\033[1;97;42m"
 NC="\033[0m"
 
 XRAY_CONFIG="/usr/local/etc/xray/config.json"
@@ -917,11 +919,11 @@ print_final_subscription_banner() {
 
   echo
   echo -e "${BOLD_GREEN}${border}${NC}"
-  echo -e "${BOLD_GREEN}  订阅链接 / SUBSCRIPTION LINK — 请立即保存${NC}"
+  echo -e "${BANNER_TITLE}  订阅链接 / SUBSCRIPTION LINK — 请立即保存  ${NC}"
   echo -e "${BOLD_GREEN}${border}${NC}"
-  echo -e "${BOLD_CYAN}${link}${NC}"
+  echo -e "${BOLD_BRIGHT_YELLOW}${link}${NC}"
   echo -e "${BOLD_GREEN}${border}${NC}"
-  echo -e "${BOLD_YELLOW}完整客户端信息已保存到: ${CLIENT_INFO}${NC}"
+  echo -e "${BOLD_CYAN}完整客户端信息已保存到: ${CLIENT_INFO}${NC}"
   echo
 }
 

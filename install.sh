@@ -471,12 +471,14 @@ configure_tcp_mss_clamp() {
     log "Adding UFW MSS clamp rule to ${rules_file}"
     tmp_file="$(mktemp)"
     {
-      printf '%s\n' "${marker}"
-      printf '*mangle\n'
-      printf ':POSTROUTING ACCEPT [0:0]\n'
-      printf '-A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n'
-      printf 'COMMIT\n'
-      printf '%s\n' "${marker}"
+      # printf '%s\n' 逐行输出：'-A ...' 以短横开头，必须走 %s，否则被当作 printf 选项报错
+      printf '%s\n' \
+        "${marker}" \
+        '*mangle' \
+        ':POSTROUTING ACCEPT [0:0]' \
+        '-A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu' \
+        'COMMIT' \
+        "${marker}"
       cat "${rules_file}"
     } > "${tmp_file}"
     cat "${tmp_file}" > "${rules_file}"

@@ -23,8 +23,15 @@
 
 ## 一键安装
 
+先切换到 root：
+
 ```bash
 sudo -i
+```
+
+再执行安装：
+
+```bash
 apt update && apt install -y curl
 bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-vision/main/install.sh)
 ```

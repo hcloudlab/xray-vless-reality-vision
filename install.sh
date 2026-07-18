@@ -33,6 +33,12 @@ REALITY_SERVER_NAME="${REALITY_SERVER_NAME:-www.cloudflare.com}"
 REALITY_DEST="${REALITY_DEST:-www.cloudflare.com:443}"
 REALITY_DNS_STRICT="${REALITY_DNS_STRICT:-warn}"
 CLIENT_NAME="${CLIENT_NAME:-Xray-Reality}"
+# Xray-core 版本锁定：26.7.11 起上游将 REALITY 默认 minClientVer 收紧为 26.3.27，
+# 基于旧 core 的客户端（Shadowrocket/mihomo 等）会被拒绝，
+# 报 "authentication failed or validation criteria not met"。
+# 26.6.27 为收紧前的已验证可用版本。覆盖方式：XRAY_VERSION=x.y.z bash install.sh
+# 详见 https://github.com/MHSanaei/3x-ui/issues/5922
+XRAY_VERSION="${XRAY_VERSION:-26.6.27}"
 INSTALLER_CORE_DIR="${INSTALLER_CORE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../vps-installer-core" 2>/dev/null && pwd || true)}"
 
 log() {
@@ -553,9 +559,9 @@ configure_ufw() {
 }
 
 install_xray() {
-  log "Installing or updating Xray-core..."
+  log "Installing or updating Xray-core ${XRAY_VERSION}..."
 
-  bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+  bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --version "${XRAY_VERSION}"
 
   if ! command -v xray >/dev/null 2>&1; then
     error "Xray command not found after installation."
@@ -564,6 +570,27 @@ install_xray() {
   # head 提前关闭管道会让 xray version 收到 SIGPIPE，配合 pipefail 会误判失败，故加 || true
   log "Installed Xray version:"
   xray version | head -n1 || true
+
+  verify_xray_version
+}
+
+verify_xray_version() {
+  local installed
+  installed="$(xray version 2>/dev/null | head -n1 | awk '{print $2}' || true)"
+
+  if [[ "${installed}" == "${XRAY_VERSION}" ]]; then
+    log "Xray-core version verified: ${installed}"
+    return 0
+  fi
+
+  warn "Xray-core version is ${installed:-unknown}, expected ${XRAY_VERSION}."
+  if [[ "${installed}" == "26.7.11" ]]; then
+    warn "Known issue: since 26.7.11, upstream sets a default REALITY minClientVer of 26.3.27."
+    warn "Clients built on older cores (Shadowrocket, mihomo, etc.) will be rejected with:"
+    warn "  REALITY: authentication failed or validation criteria not met"
+  fi
+  warn "Older clients may fail to connect. To install the pinned version manually, run:"
+  warn "  XRAY_VERSION=${XRAY_VERSION} bash install.sh"
 }
 
 generate_values() {

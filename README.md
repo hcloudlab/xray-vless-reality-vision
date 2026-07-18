@@ -130,6 +130,36 @@ xray version
 4. 如果二维码无法显示，直接复制 `/root/xray-reality-client.txt` 里的原始 VLESS 链接手动导入。
 5. 如果重新安装后链接失效，重新运行一键安装命令并检查终端最后输出的订阅链接。
 
+## 已知问题：Xray-core 26.7.11 起旧客户端无法连接
+
+上游从 26.7.11 起将 REALITY 的默认 `minClientVer` 收紧为 `26.3.27`（有意为之的默认值变更，不是 bug，不会有"修复版本"）。服务端 core 为 26.7.11 及以上时，基于旧 core 的客户端（Shadowrocket、mihomo 等）会被直接拒绝，服务端日志报：
+
+```text
+REALITY: processed invalid connection ... authentication failed or validation criteria not met
+```
+
+该报错与"客户端参数填错"无法区分，请先按下面方法自查。
+
+**本脚本当前锁定安装 Xray-core 26.6.27**（收紧前的已验证可用版本），以兼容存量客户端。如需安装其他版本，用环境变量覆盖：
+
+```bash
+XRAY_VERSION=26.7.11 bash <(curl -Ls https://raw.githubusercontent.com/hcloudlab/xray-vless-reality-vision/main/install.sh)
+```
+
+**存量用户自查：**
+
+```bash
+# 查看服务端 core 版本
+xray version
+/usr/local/x-ui/bin/xray-linux-amd64 version   # 如果用 3x-ui
+```
+
+若版本为 26.7.11 及以上且客户端连不上、日志报 authentication failed，说明客户端 core 旧于 26.3.27。三种处理方式：
+
+1. **升级客户端**（推荐）：更新 Shadowrocket / mihomo 等到基于新 core 的版本，一劳永逸。
+2. **降级服务端**：重新运行本脚本即可装回 26.6.27。临时方案，旧版本不会获得上游后续修复。
+3. **显式放开 `minClientVer`**：在服务端 REALITY 配置中手动设置 `"minClientVer": "0.0.0"`。上游对该默认值的注释是 "change it at your own risk"，说明有安全考量；本脚本**不会**代替你写入这个字段，是否放开请自行判断并自担风险。
+
 ## 项目结构
 
 ```text
